@@ -2,6 +2,10 @@
 
 > 一个专为自托管场景打造的高性能文件/文本分享平台，采用前后端分离架构。
 
+> **📢 本仓库已拆分(2026-10)**:活跃开发已迁移至 [filescodebox 组织](https://github.com/filescodebox)的多仓库结构——
+> [contracts](https://github.com/filescodebox/contracts)(错误码+Thrift 类型)/ [core](https://github.com/filescodebox/core)(业务核心库)/ [server](https://github.com/filescodebox/server)(部署应用)/ [frontend](https://github.com/filescodebox/frontend)(Vue3 前端)/ [filecodebox-fnos](https://github.com/filescodebox/filecodebox-fnos)(飞牛 fnOS 应用适配层)。
+> 本仓库保留为历史存档与 [组织镜像](https://github.com/filescodebox/FileCodeBox)。
+
 ---
 
 ## 📌 项目概览
