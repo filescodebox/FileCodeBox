@@ -4,6 +4,10 @@
 
 > 拆分前的单仓库完整版本保留在 [legacy 分支](https://github.com/filescodebox/FileCodeBox/tree/legacy)(全量历史)。
 
+## 架构文档
+
+完整的架构图集(生态全景 / 仓库依赖 / core 分层 / 请求流 / 数据流 / 部署形态 / 发布流水线)见 **[docs/architecture.md](docs/architecture.md)**(Mermaid 渲染)。
+
 ## 模块仓库
 
 | 仓库 | 角色 | 版本 |
