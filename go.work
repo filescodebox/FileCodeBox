@@ -1,0 +1,9 @@
+go 1.26.5
+
+// 本地多模块联编:make setup 拉取的模块仓库生效
+// (各模块 go.mod 均为正式版本依赖,无 workspace 时也可独立构建)
+use (
+	./contracts
+	./core
+	./server
+)

@@ -1,0 +1,23 @@
+# FileCodeBox 快速体验 / 自托管编排
+#
+#   docker compose up -d            # 用 ghcr 发布镜像(需包为 public,或在 ~/.docker/config.json 登录 ghcr)
+#   BUILD=1 docker compose up -d    # 本地构建(make setup 后可用)
+#
+# 数据持久化:./data(SQLite 库 + 上传文件)。JWT 密钥缺省由镜像内 adapter 自动生成并持久化;
+# 生产环境建议显式注入 FCB_JWT_SECRET。
+services:
+  filecodebox:
+    image: ghcr.io/filescodebox/server:latest
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: filecodebox
+    ports:
+      - "12345:12345"
+    environment:
+      - TZ=Asia/Shanghai
+      - FCB_SERVER_MODE=release
+      - FCB_PRODUCTION=1
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

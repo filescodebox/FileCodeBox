@@ -1,0 +1,13 @@
+# 模块仓库(setup.sh clone 进来的独立 git 仓库,不属于本仓)
+/contracts/
+/core/
+/server/
+/frontend/
+/filecodebox-fnos/
+
+# Go 构建产物
+bin/
+data/
+logs/
+*.log
+.DS_Store
