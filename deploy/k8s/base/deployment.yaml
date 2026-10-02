@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filecodebox
+  namespace: filecodebox
+  labels:
+    app: filecodebox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: filecodebox
+  template:
+    metadata:
+      labels:
+        app: filecodebox
+    spec:
+      containers:
+        - name: filecodebox
+          image: ghcr.io/filescodebox/server:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 12345
+              name: http
+          envFrom:
+            - configMapRef:
+                name: filecodebox-config
+            - secretRef:
+                name: filecodebox-secret
+          # 存活探针：进程是否运行（轻量，不检查依赖）
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # 就绪探针：依赖（DB）就绪才接流量
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # 启动探针：慢启动期间不被 liveness 杀死
+          startupProbe:
+            httpGet:
+              path: /live
+              port: http
+            periodSeconds: 10
+            failureThreshold: 18  # 最多等 3 分钟启动
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          # 安全上下文：非 root 运行
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: filecodebox-data

@@ -1,0 +1,19 @@
+# 生产环境 overlay
+# 用法: kubectl apply -k deploy/k8s/overlays/prod
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: filecodebox
+resources:
+  - ../../base
+# 生产覆盖：副本数、镜像 tag（部署前修改）
+patches:
+  - target:
+      kind: Deployment
+      name: filecodebox
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: ghcr.io/filescodebox/server:latest  # 替换为具体版本 tag

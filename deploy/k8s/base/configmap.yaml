@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filecodebox-config
+  namespace: filecodebox
+  labels:
+    app: filecodebox
+data:
+  # 非敏感配置（敏感配置走 Secret / 环境变量注入）
+  FCB_SERVER_HOST: "0.0.0.0"
+  FCB_SERVER_PORT: "12345"
+  FCB_SERVER_MODE: "release"
+  FCB_DATA_PATH: "/app/data"
+  FCB_PRODUCTION: "1"
+  FCB_DATABASE_DRIVER: "sqlite"
+  FCB_DATABASE_DB_NAME: "/app/data/fileCodeBox.db"
+  FCB_REDIS_HOST: "redis"
+  FCB_REDIS_PORT: "6379"
+  FCB_OPEN_UPLOAD: "true"
+  FCB_UPLOAD_SIZE: "10485760"
+  # 可观测性
+  FCB_METRICS_ENABLED: "true"
+  FCB_METRICS_PATH: "/metrics"

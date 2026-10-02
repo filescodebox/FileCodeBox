@@ -1,0 +1,22 @@
+# ServiceMonitor 供 Prometheus Operator 抓取 /metrics（需集群已安装 kube-prometheus-stack）。
+# 若集群未安装 prometheus-operator，可忽略本文件，改用传统 ServiceMonitor 或静态抓取配置。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: filecodebox
+  namespace: filecodebox
+  labels:
+    app: filecodebox
+    release: prometheus  # 按实际 prometheus release 名调整，匹配 prometheus 服务发现
+spec:
+  selector:
+    matchLabels:
+      app: filecodebox
+  namespaceSelector:
+    matchNames:
+      - filecodebox
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
