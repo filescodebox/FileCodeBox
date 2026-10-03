@@ -22,8 +22,10 @@ clone_or_update frontend    frontend    main
 
 # 飞牛 fnOS 应用适配层(go.work 已引用,默认拉取;SETUP_FNOS=0 可跳过,
 # 但跳过后工作区内 go build 会因 go.work 缺目录而报错)
+# 注: repo 2026-10-03 已由 filecodebox-fnos 改名 filescodebox-fnos(旧 URL 自动重定向),
+# 本地目录名沿用 filecodebox-fnos 未改(改目录会破坏并行会话持久 shell 的 cwd)
 if [ "${SETUP_FNOS:-1}" = "1" ]; then
-  clone_or_update filecodebox-fnos filecodebox-fnos master
+  clone_or_update filescodebox-fnos filecodebox-fnos master
 fi
 
 echo "✓ 工作区就绪:$(ls -d */ 2>/dev/null | tr -d '/' | tr '\n' ' ')"
