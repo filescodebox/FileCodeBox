@@ -57,6 +57,7 @@
 | `FCB_DOWNLOAD_TOKEN_ENABLED` | true | 取件下载令牌（HMAC 时间窗）强制校验 |
 | `FCB_LOCKOUT_ENABLED` | true | 登录/取件失败计数锁定 |
 | `FCB_LOCKOUT_MAX_ATTEMPTS` | 10 | 窗口内失败阈值 |
+| `FCB_API_TOKEN_ENABLED` | true | 用户级 API Key（`fcb_sk_`）认证总开关；false 时携带 Key 的请求一律 401（紧急停用），详见 docs/API-TOKENS.md |
 | `FCB_SSRF_ALLOW_PRIVATE` | false | 允许 s3/webdav 端点指向私网。**局域网 MinIO/WebDAV（飞牛 NAS）部署需设 true** |
 | `FCB_CORS_ALLOW_ORIGINS` | 空 | CORS 白名单，逗号分隔 |
 | `FCB_ENABLE_HSTS` | false | HSTS（仅 HTTPS 部署开启） |
