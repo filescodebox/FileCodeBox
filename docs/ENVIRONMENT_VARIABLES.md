@@ -94,7 +94,6 @@
 |---|---|---|
 | `FCB_METRICS_ENABLED` | false | Prometheus 指标（独立监听 127.0.0.1:9090，`FCB_METRICS_ADDR` 可改） |
 | `FCB_METRICS_PATH` | /metrics | 指标路径 |
-| `FCB_TRACING_ENABLED` | false | OTel tracing |
 
 ## 其他
 
