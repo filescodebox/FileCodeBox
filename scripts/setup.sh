@@ -1,5 +1,5 @@
 #!/bin/bash
-# 拉齐/更新 FileCodeBox 工作区的四个模块仓库。
+# 拉齐/更新 FileCodeBox 工作区的五个模块仓库。
 # 幂等:已存在则 git pull --ff-only。
 set -e
 cd "$(dirname "$0")/.."
@@ -20,8 +20,9 @@ clone_or_update core        core        main
 clone_or_update server      server      main
 clone_or_update frontend    frontend    main
 
-# 可选:飞牛 fnOS 应用适配层(默认跳过,SETUP_FNOS=1 启用)
-if [ "${SETUP_FNOS:-0}" = "1" ]; then
+# 飞牛 fnOS 应用适配层(go.work 已引用,默认拉取;SETUP_FNOS=0 可跳过,
+# 但跳过后工作区内 go build 会因 go.work 缺目录而报错)
+if [ "${SETUP_FNOS:-1}" = "1" ]; then
   clone_or_update filecodebox-fnos filecodebox-fnos master
 fi
 
