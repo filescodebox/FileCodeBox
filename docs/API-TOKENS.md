@@ -79,9 +79,10 @@ curl -s "http://localhost:12345/api/v1/user/shares?page=1&page_size=20" \
 
 - **fail-closed**：请求携带 Key 但无效（不存在/过期/已吊销/用户被禁）一律 `401 {"message":"Invalid API Key"}`，不区分原因（防枚举）；绝不静默降级为匿名。
 - **防爆破**：无效 Key 连续 10 次（默认）触发 `apikey|IP` 锁定 10 分钟，期间返回 `429`；有效使用即清零。
-- **限流**：直传/分块/预签名与登录分维度路径限流（上传 10 QPS/IP 默认）。
+- **限流**：路径感知分维度限流（上传 10 QPS/IP 默认）之外，每把 Key 还有**独立令牌桶限流**（默认 20 QPS / 桶 40，`FCB_API_TOKEN_PER_KEY_QPS` 可调，0 = 不限）——单把 Key 被盗也打不满服务器。
+- **临期提醒**：Key 到期前 7 天，站内通知（含 Webhook 外推）提醒属主一次，不重复打扰。
 - **存储安全**：服务端只存 Key 的 SHA-256 摘要；明文仅签发时返回一次。
-- **审计**：Key 认证的上传/下载计入 `transfer_logs`（user_id 维度，且带 `api_key_id` 归因列——泄露排查可精确定位到哪把 Key）；列表页可见每把 Key 的"最后使用"时间，发现异常立即吊销；登出后 JWT 即刻失效（含 refresh 换发链路）。
+- **审计**：Key 认证的上传/下载计入 `transfer_logs`（user_id 维度，且带 `api_key_id` 归因列——泄露排查可精确定位到哪把 Key，管理后台传输日志页可见）；Key 列表展示"最后使用"时间与**来源 IP**，发现异常立即吊销；登出后 JWT 即刻失效（含 refresh 换发链路）。
 - **总开关**：`security.api_token.enabled=false`（env `FCB_API_TOKEN_ENABLED`）时携带 Key 的请求一律 401（紧急停用）。
 
 ## 5. 部署安全提醒

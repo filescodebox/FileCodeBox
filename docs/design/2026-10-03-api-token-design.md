@@ -216,9 +216,9 @@ security:
 | 3 | **契约不完整**：openapi 仅 api-keys 端点标注了认证，上传三通道与分享管理端点未标，Swagger 用户不知道能带 Key | 中 | 本轮补（§9.4 C） |
 | 4 | **HTTP 部署复制缺陷**：非安全上下文（如 215 的 `http://IP`）`navigator.clipboard` 不可用，当前降级为 toast 弹 Key，粗糙 | 低 | 本轮补（§9.5 D） |
 | 5 | **相邻缺陷：refresh 不校验黑名单**：`POST /api/v1/user/refresh` 直接换发，登出后（token 已入黑名单）仍可刷新出新 token，登出撤销可被绕过。非本特性引入，但同属凭证生命周期 | 高 | 本轮顺手修（§9.6 F） |
-| 6 | 可观测性：accesslog/metrics 不区分认证类型（jwt/api_key），Key 流量占比无法观测 | 低 | 搁置：需要时在 accesslog 加一个字段即可 |
-| 7 | Key 临期无提醒（notify 域已有，可做到期扫描通知） | 低 | 搁置：有明确用户反馈再做 |
-| 8 | per-Key 独立限流 | 低 | 维持波次 3（触发条件：出现单 Key 滥用/多 IP 绕过路径限流） |
+| 6 | 可观测性：accesslog/metrics 不区分认证类型（jwt/api_key），Key 流量占比无法观测 | 低 | **已落地（波次3）**：accesslog 增 auth_type/user_id 字段 |
+| 7 | Key 临期无提醒（notify 域已有，可做到期扫描通知） | 低 | **已落地（波次3）**：6h 扫描、提前 7 天站内通知（Webhook 外推）、expiry_notified_at 去重 |
+| 8 | per-Key 独立限流 | 低 | **已落地（波次3）**：`security.api_token.per_key_qps/burst`（默认 20/40，0=不限），令牌桶进程内，429 语义独立 |
 | 9 | Key 签发/吊销无独立审计表 | 低 | 搁置：accesslog 已覆盖端点命中（JWT 身份 + IP + trace_id） |
 | 10 | `/api/v1` 组未来扩展的暴露面漂移 | — | 治理规则：组内新增路由必须评估 Key 暴露面（写入 bootstrap 注释，routes_guard 守卫路径集） |
 
