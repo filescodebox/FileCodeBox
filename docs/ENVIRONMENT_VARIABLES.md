@@ -99,3 +99,19 @@
 ## 其他
 
 `FCB_DATA_PATH`（数据目录）、`FCB_STORAGE_TYPE` / `FCB_STORAGE_PATH`（存储后端）、`FCB_USER_ALLOW_REGISTRATION`（开放注册）、`CONFIG_PATH`（配置文件路径）。
+
+## 2026-10 能力扩展（P0-P3）
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `FCB_MODERATION_CLAMAV_ENABLED` | `false` | 文件病毒扫描总开关（clamd INSTREAM；moderation.enabled=true 时生效，fail-open） |
+| `FCB_MODERATION_CLAMAV_ADDR` | `localhost:3310` | clamd 地址 |
+| `FCB_SMTP_HOST` / `FCB_SMTP_PORT` / `FCB_SMTP_USERNAME` / `FCB_SMTP_PASSWORD` / `FCB_SMTP_FROM` | 空 | SMTP 邮件通知（站内信创建后对登记邮箱异步补发；port 465=隐式 TLS，587/25=STARTTLS） |
+| `FCB_OIDC_ENABLED` | `false` | OIDC 单点登录（回调 `<base_url>/api/v1/user/oidc/callback`，登录页按钮随 `/api/config` 的 `oidcEnabled` 出现） |
+| `FCB_OIDC_ISSUER` / `FCB_OIDC_CLIENT_ID` / `FCB_OIDC_CLIENT_SECRET` / `FCB_OIDC_SCOPES` | 空 | OIDC 参数（scopes 默认 `openid profile email`） |
+| `FCB_LOCAL_IMPORT_ENABLED` | `false` | NAS 本地文件免上传导入（`POST /api/v1/user/shares/import-local`，仅登录用户） |
+| `FCB_LOCAL_IMPORT_ROOTS` | 空 | 允许导入的绝对目录白名单（逗号分隔，EvalSymlinks 防穿越） |
+
+相关新端点：多文件分享 `POST /api/v1/share/multi-direct|multi-bind`、寄件码
+`/api/v1/user/requests` + `/request/:token` + `/api/v1/request/:token/upload`、
+多文件下载 `/share/download?code=xxx[&file=<id>]`（多文件默认流式 zip）。
