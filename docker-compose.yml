@@ -1,4 +1,4 @@
-# FileCodeBox 快速体验 / 自托管编排
+# FilesCodeBox 快速体验 / 自托管编排
 #
 #   cp .env.example .env          # 按需修改(最少 0 必改项,开箱即用)
 #   docker compose up -d          # 用 ghcr 发布镜像(需包可匿名拉取,或 docker login ghcr.io)
