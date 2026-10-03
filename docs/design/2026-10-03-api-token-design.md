@@ -202,3 +202,55 @@ security:
 - 限流：直传路径命中 Upload 维度、`/user/login` 命中 Login 维度；
 - 路由契约：`routes_guard_test.go` 快照双向更新；
 - 冒烟：`make smoke` 追加"签发 Key → Key 直传文本 → Key 列举自己分享 → 吊销后 401"一条链路。
+
+## 9. 缺口评审与补充设计（2026-10-03 第二轮，波次 1+2 落地后自查）
+
+以攻击者/运维/第三方开发者三个视角对已落地实现做完整评审。结论：核心防护链（fail-closed、防爆破、限流、总开关、边界）成立，发现 2 个高优先缺口、2 个中低优先缺口、1 个相邻安全缺陷，以及 4 项维持搁置项。
+
+### 9.1 缺口总表
+
+| # | 缺口 | 严重度 | 处置 |
+|---|---|---|---|
+| 1 | **审计归因缺失**：`transfer_logs` 只记 `user_id`，Key 泄露排查时只能归因到"账号"，无法定位"哪把 Key" | 高 | 本轮补（§9.2 A） |
+| 2 | **应急止损缺失**：无"一键吊销全部"，账号疑似接管时逐把吊销太慢 | 高 | 本轮补（§9.3 B） |
+| 3 | **契约不完整**：openapi 仅 api-keys 端点标注了认证，上传三通道与分享管理端点未标，Swagger 用户不知道能带 Key | 中 | 本轮补（§9.4 C） |
+| 4 | **HTTP 部署复制缺陷**：非安全上下文（如 215 的 `http://IP`）`navigator.clipboard` 不可用，当前降级为 toast 弹 Key，粗糙 | 低 | 本轮补（§9.5 D） |
+| 5 | **相邻缺陷：refresh 不校验黑名单**：`POST /api/v1/user/refresh` 直接换发，登出后（token 已入黑名单）仍可刷新出新 token，登出撤销可被绕过。非本特性引入，但同属凭证生命周期 | 高 | 本轮顺手修（§9.6 F） |
+| 6 | 可观测性：accesslog/metrics 不区分认证类型（jwt/api_key），Key 流量占比无法观测 | 低 | 搁置：需要时在 accesslog 加一个字段即可 |
+| 7 | Key 临期无提醒（notify 域已有，可做到期扫描通知） | 低 | 搁置：有明确用户反馈再做 |
+| 8 | per-Key 独立限流 | 低 | 维持波次 3（触发条件：出现单 Key 滥用/多 IP 绕过路径限流） |
+| 9 | Key 签发/吊销无独立审计表 | 低 | 搁置：accesslog 已覆盖端点命中（JWT 身份 + IP + trace_id） |
+| 10 | `/api/v1` 组未来扩展的暴露面漂移 | — | 治理规则：组内新增路由必须评估 Key 暴露面（写入 bootstrap 注释，routes_guard 守卫路径集） |
+
+### 9.2 补充设计 A：Key 粒度审计归因
+
+- `pkg/middleware`：`withIdentity` 增加第 5 参 `apiKeyID uint`（JWT 路径传 0）；新增 `APIKeyIDFromContext(ctx) (uint, bool)`。`validateAPIKey` 传入 `key.ID`。
+- `model.TransferLog` 增加 `APIKeyID *uint`（`gorm:"index"`）：AutoMigrate 自动加列（SQLite/新部署）；补版本化迁移 `000002_transfer_log_api_key_id` 保持 `database.migrate` 模式一致。
+- `transfer.Record` 签名增加 `apiKeyID *uint`（调用方仅 3 处：`gen/handler/share/share_service.go` 文本上传 ：178、文件上传 ：379、下载 ：785，均在 handler 内可直接取 ctx；非 Key 认证传 nil）。
+- 查询面：管理员传输日志已有列表/过滤，字段带出即可；用户侧"按 Key 查用量"留待需求。
+
+### 9.3 补充设计 B：一键吊销全部
+
+- 新端点 `POST /user/api-keys/revoke-all`（**JWT-only**，gen 路由注册 + routes_guard 契约表更新）→ service `RevokeAllByUser`（`UPDATE user_api_keys SET revoked=true, revoked_at=now WHERE user_id=? AND revoked=false`，返回吊销数量；单条 UPDATE 原子）。
+- Tokens 页工具栏加"吊销全部"按钮：confirm 文案动态含当前有效数量，完成后刷新列表。
+- 语义澄清（写进 API-TOKENS.md）：修改密码**不**自动吊销 Key（与 JWT 现状一致——改密码同样不踢已有会话）；应急路径 = 本按钮，或管理员封禁账号（Status 检查使该账号全部 Key 即刻失效）。
+
+### 9.4 补充设计 C：Swagger 契约补全
+
+- 给以下端点标 `security: [{bearerAuth: []}, {ApiKeyAuth: []}]`（OpenAPI 数组=OR 语义）：`/share/text/`、`/share/file/`、`/share/select/`、`/chunk/upload/*`（4 条）、`/api/v1/presign/*`（3+1 条）、`/api/v1/user/shares*`（5 条）、`/api/v1/notifies/*`（3 条）。
+- `npm run gen:api` 再生成；Swagger UI 这些端点出现双锁图标，第三方一眼可见。
+
+### 9.5 补充设计 D：复制降级（HTTP 部署）
+
+- Tokens.vue `copyKey`：`navigator.clipboard` 不存在或拒绝时，退化为"隐藏 textarea + `document.execCommand('copy')`"；仍失败则提示手动选择（明文 code 已 `user-select: all`，点击全选）。
+
+### 9.6 相邻修复 F：refresh 黑名单校验
+
+- `auth.RefreshToken(token)` → `auth.RefreshToken(ctx, token)`：ParseToken 成功后校验 `IsTokenRevoked(ctx, token)`，命中返回错误（唯一调用点 `bootstrap.go:688` 同步改）。
+- 测试：auth 包单测——Generate → Revoke（黑名单内存模式）→ Refresh 必须失败；未吊销 Refresh 成功。
+- 语义：与 AuthMiddleware/UserAuth 的黑名单检查对齐，堵住"登出后 token 复活"。
+
+### 9.7 实施批次
+
+- **波次 2.5（本轮）**：A + B + C + D + F，全部向后兼容（新增列可空、新端点、契约标注、纯前端降级、refresh 签名内部变更）。
+- 波次 3 维持：per-Key 限流、过期提醒、认证类型指标、Key 操作审计表。
