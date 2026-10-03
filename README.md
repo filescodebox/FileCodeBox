@@ -3,18 +3,21 @@
 高性能文件/文本匿名分享平台的**装配仓库**:本仓不含业务代码,只负责把各模块仓库拉齐成一个可开发、可构建、可部署的完整工作区。
 
 > 拆分前的单仓库完整版本保留在 [legacy 分支](https://github.com/filescodebox/FileCodeBox/tree/legacy)(全量历史)。
+> English overview: [README.en-US.md](README.en-US.md)
 
 ## 架构文档
 
 完整的架构图集(生态全景 / 仓库依赖 / core 分层 / 请求流 / 数据流 / 部署形态 / 发布流水线)见 **[docs/architecture.md](docs/architecture.md)**(Mermaid 渲染)。
+
+产品路线图见 **[ROADMAP.md](ROADMAP.md)**;参与贡献前请读 [CONTRIBUTING.md](CONTRIBUTING.md),安全漏洞请走 [SECURITY.md](SECURITY.md) 的披露流程。变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 模块仓库
 
 | 仓库 | 角色 | 版本 |
 |------|------|------|
 | [contracts](https://github.com/filescodebox/contracts) | 契约层:错误码 + Thrift 生成类型(纯类型,零业务依赖) | v0.1.0 |
-| [core](https://github.com/filescodebox/core) | 业务核心库:10 个域服务 + repo/storage + `bootstrap.Bootstrap()` 库入口 | v0.1.0 |
-| [server](https://github.com/filescodebox/server) | 独立部署应用:main 薄壳 + 前端静态资源 + Dockerfile | v0.1.0 |
+| [core](https://github.com/filescodebox/core) | 业务核心库:10 个域服务 + repo/storage + `bootstrap.Bootstrap()` 库入口 | v0.2.0 |
+| [server](https://github.com/filescodebox/server) | 独立部署应用:main 薄壳 + 前端静态资源 + Dockerfile | 跟随 core |
 | [frontend](https://github.com/filescodebox/frontend) | Vue3 + TS + Vite + Element Plus(类型由 openapi.json 生成) | - |
 | [filecodebox-fnos](https://github.com/filescodebox/filecodebox-fnos) | 飞牛 fnOS 应用适配(可选,`SETUP_FNOS=1 make setup` 启用) | v0.1.1 |
 
