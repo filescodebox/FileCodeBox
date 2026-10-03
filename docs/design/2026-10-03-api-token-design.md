@@ -1,7 +1,7 @@
 # API Token（用户级）直接接口上传/操作 + 接口防护设计
 
 日期：2026-10-03
-状态：**提案，待拍板**（含 4 个决策点，见文末）
+状态：**设计定案，待批准开工**（4 个决策点已收敛为定案，见第 7 节）
 涉及仓库：core（主）、frontend、hub docs、contracts（仅 openapi 快照，无 IDL 变更）
 
 ## 1. 背景与目标
@@ -62,8 +62,15 @@
 └──────────────────────────────────────────────────────┘
 ```
 
-认证头定稿：`Authorization: ApiKey fcb_sk_xxx` 或 `X-API-Key: fcb_sk_xxx`。
-**不支持 `Bearer <key>`**——Bearer 语义留给 JWT，避免解析歧义与 openapi 描述冲突。
+认证头定稿（对齐业界惯例：GitHub/GitLab/Stripe 的 PAT 均为"前缀化密钥 + Bearer 头"）：
+
+```
+Authorization: Bearer fcb_sk_xxx   ← 首选，标准 HTTP 客户端/curl 习惯
+Authorization: ApiKey fcb_sk_xxx   ← 兼容保留
+X-API-Key: fcb_sk_xxx              ← 兼容保留（已在 CORS 白名单）
+```
+
+`Bearer` 与 JWT 的区分**由前缀确定性判定**：`fcb_sk_` 开头 → 按 API Key 处理，否则按 JWT（JWT 恒为 `eyJ` 开头的 base64，无歧义、无需试探解析）。
 **删除 `?api_key=` query 支持**（不留配置开关，少一个开关多一分安全）。
 
 ## 4. 详细设计
@@ -74,6 +81,7 @@
 
 1. `pkg/middleware.OptionalIdentityMiddleware()`（新）：
    实现为 `OptionalAuthMiddleware()`（既有，JWT）+ `APIKeyAuth` 收紧版 Optional 变体，顺序串联。先 JWT 后 Key，天然无覆盖冲突；都未携带 → 匿名放行。
+   凭证分发在提取层完成：`Bearer fcb_sk_*` / `ApiKey` / `X-API-Key` → Key；其余 Bearer → JWT。JWT 失效在 Optional 语义下按既有行为降级匿名（会话过期的 UX 惯例），与 Key 的 fail-closed（见 4.2-d）有意不对称：携带 Key 是显式认证意图，失效 JWT 是会话到期。
    挂载点（替换现有 `OptionalAuthMiddleware()`，`gen/router/*/middleware.go` 为人工维护、重生成不覆盖）：
    - `gen/router/share/middleware.go`：`_sharetextMw`、`_sharefileMw`、`_selectMw`
    - `gen/router/chunk/middleware.go`、`gen/router/presign/middleware.go`：所有 Optional 挂载点（impl 时逐一核对）
@@ -94,12 +102,14 @@
 | # | 缺陷 | 修法 |
 |---|---|---|
 | a | 不查用户状态 | 验 Key 后校验 `user.Status == "active"`，否则 401；banned/inactive 用户 Key 立即全失效 |
-| b | query 传 Key | `extractAPIKey` 删除 `?api_key=` 分支，只留两个 Header |
+| b | query 传 Key | `extractAPIKey` 删除 `?api_key=` 分支，只留三种 Header（`Bearer fcb_sk_*` / `ApiKey` / `X-API-Key`） |
 | c | `TouchLastUsed` 每请求写库 | 进程内 `sync.Map[keyID]lastTouch` 节流：每 Key 60s 最多写一次（多实例各自节流即可，目的只是降写放大） |
 | d | Optional 变体 fail-open | 语义改为：**未携带 Key → 匿名放行；携带但无效/过期/吊销/用户禁用 → 一律 401 拒绝**。统一文案 `Invalid API Key`，不区分具体原因（防枚举） |
 | e | 无防爆破 | 携带 Key 且校验失败 → 复用现有 lockout（`lockout.RecordFailure("apikey|" + ResolveClientIP)`，CheckLocked 前置），走默认 10 次/5 分钟锁定参数；成功验证 → Reset |
 
 顺带：验证失败的 Key 计数、成功使用节流均无新增外部依赖（内存兜底，Redis 可选加速，与现有 lockout 同构）。
+
+**明确不做的取舍**：不引入"key→user 查询缓存"（60s TTL 可省掉每请求 2 个索引查询，但吊销/封禁会延迟生效最多 60s——对安全语义损伤大于性能收益；两个唯一索引/主键查询在自部署量级下是亚毫秒级）。只做 c 的 TouchLastUsed 写节流，认证查询每请求走库，保证吊销与封禁**即时生效**。
 
 ### 4.3 限流补位（波次 1）
 
@@ -145,8 +155,8 @@ security:
 ### 4.6 使用面 / DX（波次 2-3）
 
 - **文档**：hub 新增 `docs/API-TOKENS.md`——获取 Key（页面或 curl+JWT 两种姿势）、认证头规范、direct/chunk/presign 三条 curl 上传示例、管理自己分享示例、防护机制说明、**HTTP 明文部署警告**（215 这类 `http://ip` 部署传 Key = 明文，需提示切 HTTPS 或仅内网使用）；
-- **Swagger**：`frontend/openapi.json` 手工补 `/user/api-keys` 三端点（若缺）+ `securitySchemes: ApiKeyAuth(header)` 定义 → `npm run gen:api` → `/api-docs` 页自动可见；
-- **前端**（波次 3，决策点 ③）：新增 `/user/tokens` 路由 + `views/user/Tokens.vue`（仿 Notifications.vue）：创建弹窗（名称 + 可选过期天数，**明文仅此一次展示 + 复制按钮**）、列表（前缀/最后使用/过期/吊销状态）、吊销二次确认；`AppLayout.vue` 桌面菜单与移动抽屉**两处**都要加。
+- **Swagger**：`frontend/openapi.json` 手工补 `/user/api-keys` 三端点（若缺）+ `securitySchemes`（`http bearer` 主方案——Swagger UI Authorize 按钮可直接粘贴 Key，另有 `apiKey` 型 `X-API-Key` 备选）→ `npm run gen:api` → `/api-docs` 页自动可见；
+- **前端**（波次 2，定案 ③）：新增 `/user/tokens` 路由 + `views/user/Tokens.vue`（仿 Notifications.vue）：创建弹窗（名称 + 可选过期天数，**明文仅此一次展示 + 复制按钮**）、列表（前缀/最后使用/过期/吊销状态）、吊销二次确认；`AppLayout.vue` 桌面菜单与移动抽屉**两处**都要加。
 
 ## 5. 威胁 → 对策总表（防护设计核心）
 
@@ -171,15 +181,17 @@ security:
 ## 6. 波次划分
 
 - **波次 1（core，防护主体）**：4.1 接线 + 4.2 收紧 + 4.3 限流补位 + `routes_guard_test.go` 契约快照更新 + 单测。发布随 core 下一版本（server 同步跟进）。
-- **波次 2（配置与文档）**：4.5 配置面 + `docs/API-TOKENS.md` + openapi.json/securitySchemes。
-- **波次 3（体验与增强，全部可独立排期）**：前端 `/user/tokens` 页、per-Key 限流、read/write scope、`user_operation_log` 审计表、admin 侧查看/吊销用户 Key。
+- **波次 2（配置、文档与前端）**：4.5 配置面 + `docs/API-TOKENS.md` + openapi.json/securitySchemes + 前端 `/user/tokens` 页（定案 ③）。
+- **波次 3（增强，全部可独立排期）**：per-Key 限流、read/write scope、`user_operation_log` 审计表、admin 侧查看/吊销用户 Key。
 
-## 7. 决策点（待拍板）
+## 7. 决策定案（2026-10-03，已收敛，替代原 4 个待拍板项）
 
-1. **Key 能力范围**：上传三通道 + 自己的分享管理（`/api/v1/user/shares*`）+ 通知列表（推荐，"接口直接操作"的完整闭环）；还是 v1 先只放开上传三通道？
-2. **过期默认值**：默认永久 + 创建时 UI 提示可设过期（推荐，脚本/cron 场景不怕突然断）；还是默认 365 天强制滚动？
-3. **前端 Key 管理页这波做吗**：推荐做（否则拿 Key 只能靠 curl 调管理接口，鸡生蛋）；资源紧张可退到"波次 3 择期"。
-4. **per-Key 独立限流**：v1 只上路径级限流（推荐，自部署够用）；per-Key 维度放波次 3。
+| # | 问题 | 定案 | 理由 |
+|---|---|---|---|
+| ① | Key 能力范围 | 上传三通道 + 自己的分享管理（`/api/v1/user/shares*`）+ 通知列表 | "接口直接操作"的完整闭环；一组中间件整体替换成本为零，单独裁剪通知反而要拆组；全部在 user_id 归属过滤内，无越权面 |
+| ② | 过期默认值 | **默认永久**，签发时可选 `ExpiresAt`/`ExpiresInDays`（服务端已支持），前端创建表单给出"建议设置过期"提示 | 对齐 GitHub classic PAT 惯例；脚本/cron 场景最怕静默滚动过期导致流水线断；吊销与封禁已提供即时止损手段 |
+| ③ | 前端 Key 管理页 | **做，并入波次 2**（与 openapi/文档同批交付） | 否则拿 Key 只能靠 curl 调管理接口，鸡生蛋；反正是 frontend 仓的一次改动，不值得拆两批 |
+| ④ | per-Key 独立限流 | **波次 3**，v1 只有路径级限流 + lockout | 自部署量级下路径级足够；per-Key 维度需要新增限流维度配置，等真实滥用出现再做（YAGNI） |
 
 ## 8. 测试策略
 
