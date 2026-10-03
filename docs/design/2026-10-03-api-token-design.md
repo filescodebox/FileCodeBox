@@ -77,6 +77,8 @@ X-API-Key: fcb_sk_xxx              ← 兼容保留（已在 CORS 白名单）
 
 ### 4.1 认证接线（波次 1，core）
 
+> **实现勘误（2026-10-03 波次 1 落地）**：认证核心统一实现在 `core/pkg/middleware/apikey.go`（gen 路由只能 import pkg 层，且避免 pkg↔transport 双方言实现）；`UserOrAPIKey()` 同样落在 pkg/middleware；transport 侧孤儿文件 `api_key_auth.go` 已删除（含 `APIKeyAuthWithAdmin`）。挂载点名称对应：本文 `OptionalIdentityMiddleware()` → 实现名 `OptionalIdentity()`（返回 `[]app.HandlerFunc`，gen 挂载点直接 return）。落地 commits：core `eaf7a38`（认证核心）、`013b02c`（接线）、`9549b78`（限流补位）。
+
 新增两个组合中间件（都是"串联复用"而非重写）：
 
 1. `pkg/middleware.OptionalIdentityMiddleware()`（新）：
