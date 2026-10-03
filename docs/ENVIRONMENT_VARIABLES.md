@@ -35,11 +35,13 @@
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `FCB_OPEN_UPLOAD` / `OPEN_UPLOAD` | true | 总开关 |
+| `FCB_OPEN_UPLOAD` / `OPEN_UPLOAD` | true | 匿名上传总开关（服务端强制执行；false 时拒绝全部匿名上传，登录用户不受影响） |
 | `FCB_UPLOAD_SIZE` / `UPLOAD_SIZE` | 10485760 | 单请求体上限（字节） |
 | `FCB_TEXT_MAX_BYTES` | 227328 (222KB) | 文本分享内容上限 |
-| `FCB_UPLOAD_ALLOWED_EXTENSIONS` | 空（黑名单模式） | 扩展名白名单，逗号分隔；非空则白名单优先 |
+| `FCB_UPLOAD_ALLOWED_EXTENSIONS` | 空（黑名单模式） | 扩展名白名单，逗号分隔；非空则必须命中（未命中拒绝，含无扩展名） |
+| `FCB_UPLOAD_BLOCKED_EXTENSIONS` | 内置默认 | 扩展名黑名单，逗号分隔；非空覆盖内置默认，白名单命中也拦截 |
 | `FCB_ENABLE_MAGIC_CHECK` | true | 魔数校验（拦截改扩展名伪装的可执行文件） |
+| `FCB_UPLOAD_ANON_DAILY_COUNT` / `FCB_UPLOAD_ANON_DAILY_BYTES` | 0（不限） | 匿名上传 per-IP 日配额（次数 / 字节） |
 
 ## 下载
 
