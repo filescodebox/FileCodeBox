@@ -20,6 +20,9 @@ JWT=$(curl -sf -X POST $B/admin/login -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"admin123"}' | jqq "['data']['token']")
 [ -n "$JWT" ] && echo "✓ admin 登录（JWT ${#JWT} 字符）" || { echo "✗ 登录失败"; exit 1; }
 
+# 1.5 清场：吊销历史 Key，避免 5 把上限影响重复执行（旧版本无此端点，忽略失败）
+curl -s -o /dev/null -X POST $B/user/api-keys/revoke-all -H "Authorization: Bearer $JWT" || true
+
 # 2. 签发 API Key
 RESP=$(curl -sf -X POST $B/user/api-keys -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' -d '{"name":"e2e-smoke"}')
 KEY=$(echo "$RESP" | jqq "['data']['key']")
@@ -50,5 +53,29 @@ curl -sf -X DELETE "$B/user/api-keys/$KID" -H "Authorization: Bearer $JWT" >/dev
 R7=$(curl -s -o /dev/null -w '%{http_code}' -X POST $B/share/text/ -H "X-API-Key: $KEY" \
   -H 'Content-Type: application/json' -d '{"text":"x","expire_value":1,"expire_style":"hour","require_auth":false}')
 [ "$R7" = "401" ] && echo "✓ 吊销后 Key 401" || { echo "✗ 吊销后仍可用：$R7"; exit 1; }
+
+# 8. 再签发一把（供 revoke-all 与归因验证）
+RESP2=$(curl -sf -X POST $B/user/api-keys -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' -d '{"name":"e2e-keep"}')
+KEY2=$(echo "$RESP2" | jqq "['data']['key']")
+[ -n "$KEY2" ] && echo "✓ 签发第二把 Key" || { echo "✗ 第二把签发失败"; exit 1; }
+
+# 9. Key2 上传 → transfer_logs.api_key_id 应为该 Key（Key 粒度归因）
+curl -s -o /dev/null -X POST $B/share/text/ -H "X-API-Key: $KEY2" \
+  -H 'Content-Type: application/json' -d '{"text":"attr","expire_value":1,"expire_style":"hour","require_auth":false}'
+sleep 1
+ATTR=$(sqlite3 data/fileCodeBox.db "SELECT api_key_id FROM transfer_logs WHERE operation='upload' ORDER BY id DESC LIMIT 1")
+[ -n "$ATTR" ] && echo "✓ 传输日志归因 api_key_id=$ATTR" || { echo "✗ 传输日志未落 api_key_id"; exit 1; }
+
+# 10. 一键吊销全部（JWT-only）
+RA=$(curl -sf -X POST $B/user/api-keys/revoke-all -H "Authorization: Bearer $JWT" | jqq "['data']['revoked']")
+[ -n "$RA" ] && echo "✓ revoke-all 吊销 ${RA} 把" || { echo "✗ revoke-all 失败"; exit 1; }
+R10=$(curl -s -o /dev/null -w '%{http_code}' -X POST $B/share/text/ -H "X-API-Key: $KEY2" \
+  -H 'Content-Type: application/json' -d '{"text":"x","expire_value":1,"expire_style":"hour","require_auth":false}')
+[ "$R10" = "401" ] && echo "✓ revoke-all 后 Key2 401" || { echo "✗ revoke-all 后仍可用：$R10"; exit 1; }
+
+# 11. refresh 黑名单：登出后旧 JWT 不得再换新 token
+curl -s -o /dev/null -X POST $B/api/v1/user/logout -H "Authorization: Bearer $JWT"
+R11=$(curl -s -o /dev/null -w '%{http_code}' -X POST $B/api/v1/user/refresh -H "Authorization: Bearer $JWT")
+[ "$R11" = "401" ] && echo "✓ 登出后 refresh 401（黑名单生效）" || { echo "✗ 登出后 refresh 仍可用：$R11"; exit 1; }
 
 echo "=== e2e 全链路 OK ==="

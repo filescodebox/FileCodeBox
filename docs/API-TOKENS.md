@@ -23,6 +23,16 @@ curl -s -X POST http://localhost:12345/user/api-keys \
 
 约束：每人最多 5 把有效 Key；吊销即时生效；封禁用户的 Key 一并失效。
 
+**一键吊销全部**（疑似泄露应急）：
+
+```bash
+curl -s -X POST http://localhost:12345/user/api-keys/revoke-all \
+  -H "Authorization: Bearer $JWT"
+# 响应 data.revoked 为吊销数量；仅 JWT 可调（Key 不能管 Key）
+```
+
+语义说明：**修改密码不会自动吊销 Key**（与 JWT 会话现状一致）——怀疑泄露时请用上面的"一键吊销全部"或用户中心页面按钮；管理员封禁账号也会使该账号全部 Key 即刻失效。
+
 ## 2. 认证方式
 
 三种请求头等价（**不接受 URL query 传参**——会被日志/Referer 泄露，服务端直接忽略）：
@@ -71,7 +81,7 @@ curl -s "http://localhost:12345/api/v1/user/shares?page=1&page_size=20" \
 - **防爆破**：无效 Key 连续 10 次（默认）触发 `apikey|IP` 锁定 10 分钟，期间返回 `429`；有效使用即清零。
 - **限流**：直传/分块/预签名与登录分维度路径限流（上传 10 QPS/IP 默认）。
 - **存储安全**：服务端只存 Key 的 SHA-256 摘要；明文仅签发时返回一次。
-- **审计**：Key 认证的上传/下载计入 `transfer_logs`（user_id 维度）；列表页可见每把 Key 的"最后使用"时间，发现异常立即吊销。
+- **审计**：Key 认证的上传/下载计入 `transfer_logs`（user_id 维度，且带 `api_key_id` 归因列——泄露排查可精确定位到哪把 Key）；列表页可见每把 Key 的"最后使用"时间，发现异常立即吊销；登出后 JWT 即刻失效（含 refresh 换发链路）。
 - **总开关**：`security.api_token.enabled=false`（env `FCB_API_TOKEN_ENABLED`）时携带 Key 的请求一律 401（紧急停用）。
 
 ## 5. 部署安全提醒
