@@ -34,14 +34,16 @@ make build     # workspace 联编
 make smoke     # 起 server 跑冒烟(健康检查/admin登录/文本分享)
 ```
 
-纯 Docker 体验:
+纯 Docker 部署(详见 [docs/DEPLOY-COMPOSE.md](docs/DEPLOY-COMPOSE.md)):
 
 ```bash
-docker compose up -d          # ghcr 发布镜像
-# 或 BUILD=1 docker compose up -d   # 本地构建(需先 make setup)
+cp .env.example .env          # 可选,全部项有安全默认
+docker compose up -d          # ghcr 发布镜像,http://localhost:12345
+# BUILD=1 make compose-up     # 本地构建(需先 make setup)
+# docker compose --profile nginx up -d   # 加 nginx 反代(须配 FCB_TRUSTED_PROXIES,见部署指南)
 ```
 
-默认管理员 `admin / admin123`(生产务必以 `FCB_ADMIN_PASSWORD` 覆盖)。
+默认管理员 `admin / admin123`(生产务必以 `FCB_ADMIN_PASSWORD` 覆盖)。JWT 密钥留空时首启自动生成并持久化到 `./data/.jwt_secret`。
 
 ## 工作区布局(setup 后)
 

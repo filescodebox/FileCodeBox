@@ -37,11 +37,11 @@ smoke: build      ## 本地起 server 并跑冒烟(健康检查/登录/文本分
 docker:           ## 构建完整 server 镜像(前端现场 npm ci;上下文=本目录)
 	docker build -f server/Dockerfile -t $(SERVER_IMAGE) .
 
-compose-up:       ## docker compose 起 server(默认拉 ghcr 镜像;BUILD=1 本地构建)
-	docker compose up -d
+compose-up:       ## docker compose 起 server(默认拉 ghcr 镜像;BUILD=1 本地构建;NGINX=1 加反代)
+	docker compose up -d $${BUILD:+--build} $${NGINX:+--profile nginx}
 
 compose-down:
-	docker compose down
+	docker compose --profile nginx down
 
 clean:
 	rm -rf bin/

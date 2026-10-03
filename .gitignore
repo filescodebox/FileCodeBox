@@ -11,3 +11,6 @@ data/
 logs/
 *.log
 .DS_Store
+
+# compose 本地环境配置(含密钥,勿提交)
+.env
