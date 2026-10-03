@@ -57,10 +57,10 @@ graph LR
 
 | 仓库 | 当前版本 | 说明 |
 |------|---------|------|
-| contracts | v0.1.0 | thrift v0.13 生成代码,版本约束以 require 传递(下游零 replace) |
-| core | v0.2.0 | v0.2.0 含分享密码保护安全修复 |
-| server | v0.1.1 | 镜像 `ghcr.io/filescodebox/server` |
-| filecodebox-fnos | v0.1.2 | 镜像 `ghcr.io/filescodebox/filecodebox-fnos` |
+| contracts | v0.2.1 | thrift v0.13 生成代码,版本约束以 require 传递(下游零 replace) |
+| core | v0.5.0 | P0 管控旁路修复/大文件流式/lockout 接线;main 已含 accesslog 可信 IP(未发版,下次 v0.6.0) |
+| server | v0.5.0 | 镜像 `ghcr.io/filescodebox/server` |
+| filescodebox-fnos | v0.2.2 | 镜像 `ghcr.io/filescodebox/filescodebox-fnos`(2026-10-03 随仓库改名,旧镜像 `filecodebox-fnos` 冻结在 v0.2.1) |
 
 ---
 
@@ -211,7 +211,7 @@ graph LR
 | 配置 | config.yaml + FCB_* env | FNOS_* env + 飞牛向导变量 |
 | JWT 密钥 | FCB_JWT_SECRET 必填(强校验) | 自动生成并持久化(装机即用) |
 | 数据 | docker volume | NAS 共享目录(用户可见可备份) |
-| 镜像 | ghcr.io/filescodebox/server | ghcr.io/filescodebox/filecodebox-fnos |
+| 镜像 | ghcr.io/filescodebox/server | ghcr.io/filescodebox/filescodebox-fnos |
 
 ---
 
