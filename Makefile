@@ -1,4 +1,4 @@
-.PHONY: setup update build test vet smoke docker compose-up compose-down clean
+.PHONY: setup update build test vet lint smoke docker compose-up compose-down clean
 
 # FileCodeBox umbrella —— 一次 clone 拉齐全部模块并统一构建。
 # 模块仓库(contracts/core/server/frontend)由 scripts/setup.sh 拉入本目录,
@@ -24,6 +24,11 @@ test:             ## 全仓 Go 测试 + 前端 typecheck
 
 vet:
 	go vet ./contracts/... ./core/... ./server/...
+
+lint:             ## golangci-lint 三个 Go 模块（CI 同款门禁；本地提交前建议跑，防 lint 溜进 CI）
+	@command -v golangci-lint >/dev/null || { echo "golangci-lint 未安装: brew install golangci-lint"; exit 1; }
+	for m in contracts core server; do echo "── $$m"; (cd $$m && golangci-lint run ./...); done
+	@echo "✓ lint OK"
 
 smoke: build      ## 本地起 server 并跑冒烟(健康检查/登录/文本分享)
 	cd server && mkdir -p data logs && (FCB_JWT_SECRET=$$(openssl rand -hex 32) \
