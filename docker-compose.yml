@@ -1,23 +1,135 @@
 # FileCodeBox 快速体验 / 自托管编排
 #
-#   docker compose up -d            # 用 ghcr 发布镜像(需包为 public,或在 ~/.docker/config.json 登录 ghcr)
-#   BUILD=1 docker compose up -d    # 本地构建(make setup 后可用)
+#   cp .env.example .env          # 按需修改(最少 0 必改项,开箱即用)
+#   docker compose up -d          # 用 ghcr 发布镜像(需包可匿名拉取,或 docker login ghcr.io)
+#   BUILD=1 make compose-up       # 本地构建(make setup 后可用;= docker compose up -d --build)
+#   docker compose --profile nginx up -d
+#                                 # 加挂 deploy/nginx/nginx.conf 反代(占用 80,
+#                                 # 须在 .env 设 FCB_TRUSTED_PROXIES,见下)
 #
-# 数据持久化:./data(SQLite 库 + 上传文件)。JWT 密钥缺省由镜像内 adapter 自动生成并持久化;
-# 生产环境建议显式注入 FCB_JWT_SECRET。
+# 数据持久化:./data(SQLite 库 + 上传文件 + .jwt_secret)。
+# Linux 裸 Docker(非 Desktop)宿主首次启动前: mkdir -p data && sudo chown 1000:1000 data
+# (容器以 uid 1000 运行,bind 挂载目录 root 属主会导致库/密钥文件写不进)。
+#
+# JWT 密钥:FCB_JWT_SECRET 未注入时,容器首启自动生成强随机值并持久化到
+# ./data/.jwt_secret,重启/升级不丢;显式注入 .env 的 FCB_JWT_SECRET 则以注入值为准
+# (轮换即改 .env 后 up -d,旧会话全部失效)。生产建议显式注入。
+#
+# 反代必读:启用 nginx profile 时必须设 FCB_TRUSTED_PROXIES=容器网段 CIDR
+# (默认 bridge 池通常为 172.16.0.0/12 覆盖;精确值可用
+#  docker network inspect <项目名>_default | grep Subnet 查询),
+# 否则后端不采信 X-Forwarded-For,限流/失败锁定全部按 nginx 的 IP 计数。
 services:
   filecodebox:
-    image: ghcr.io/filescodebox/server:latest
+    image: ghcr.io/filescodebox/server:${FCB_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: server/Dockerfile
     container_name: filecodebox
     ports:
-      - "12345:12345"
+      # FCB_API_BIND=127.0.0.1 可把后端收进回环、仅经反代对外:
+      # 注意发布端口若被宿主 NAT(SNAT 成网关地址),直连客户端的源 IP 会落进
+      # trusted_proxies 网段,伪造 XFF 可绕过限流——有反代时建议回收直连入口
+      - "${FCB_API_BIND:-0.0.0.0}:${FCB_API_PORT:-12345}:12345"
     environment:
-      - TZ=Asia/Shanghai
-      - FCB_SERVER_MODE=release
-      - FCB_PRODUCTION=1
+      - TZ=${TZ:-Asia/Shanghai}
+      - FCB_SERVER_MODE=${FCB_SERVER_MODE:-release}
+      - FCB_PRODUCTION=${FCB_PRODUCTION:-1}
+      # 以下透传项留空 = 沿用安全默认(详见 docs/ENVIRONMENT_VARIABLES.md):
+      # JWT 密钥留空 → entrypoint 自动生成并持久化(见文件头)
+      - FCB_JWT_SECRET=${FCB_JWT_SECRET:-}
+      # 管理员密码留空 → admin/admin123 并打警告日志,生产必须覆盖
+      - FCB_ADMIN_PASSWORD=${FCB_ADMIN_PASSWORD:-}
+      # 对外完整地址(反代/子路径部署生成分享链接用),直连可留空
+      - FCB_SERVER_BASE_URL=${FCB_SERVER_BASE_URL:-}
+      # 可信代理 CIDR(逗号分隔);反代部署必填,直连留空
+      - FCB_TRUSTED_PROXIES=${FCB_TRUSTED_PROXIES:-}
+      # Redis:匿名取件码映射/预签名/分布式限流/JWT 黑名单依赖。
+      # 默认指向本编排内的 redis 服务;要禁用设 FCB_REDIS_HOST= 为空
+      # (禁用后匿名取件/文件直传分享不可用,文本分享与账号体系不受影响)
+      - FCB_REDIS_HOST=${FCB_REDIS_HOST:-redis}
+      - FCB_REDIS_PORT=${FCB_REDIS_PORT:-6379}
+      - FCB_REDIS_PASSWORD=${FCB_REDIS_PASSWORD:-}
+    depends_on:
+      redis:
+        condition: service_healthy
     volumes:
       - ./data:/app/data
+    # 核心启动逻辑前置:JWT 密钥为空时生成并写入数据卷(镜像内 busybox 实现,
+    # 不依赖 openssl)。显式注入 FCB_JWT_SECRET 时跳过,不读写密钥文件。
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$$FCB_JWT_SECRET" ] && [ -f /app/data/.jwt_secret ]; then
+          FCB_JWT_SECRET=$$(cat /app/data/.jwt_secret)
+          export FCB_JWT_SECRET
+        fi
+        if [ -z "$$FCB_JWT_SECRET" ]; then
+          FCB_JWT_SECRET=$$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 48)
+          export FCB_JWT_SECRET
+          printf '%s' "$$FCB_JWT_SECRET" > /app/data/.jwt_secret
+          chmod 600 /app/data/.jwt_secret
+        fi
+        exec ./server --config ./config/config.yaml
     restart: unless-stopped
+    healthcheck: # 必须显式 GET(/live 未注册 HEAD,--spider 会发 HEAD 得 404)
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:12345/live"]
+      interval: 15s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis(编排内置,开箱即用):匿名取件码仅存于 Redis(过期/次数/密码仍以
+  # SQLite 为准)。AOF 持久化保证 redis 重启后取件码映射不丢;
+  # 数据在命名卷 redisdata 中,不与 ./data(SQLite/上传文件)混放。
+  redis:
+    image: redis:7-alpine
+    container_name: filecodebox-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 可选反代:docker compose --profile nginx up -d
+  # 模板全文(deploy/nginx/nginx.conf)含 HTTPS/子路径部署注释块与大小配平说明。
+  nginx:
+    image: nginx:alpine
+    profiles: ["nginx"]
+    container_name: filecodebox-nginx
+    ports:
+      - "${FCB_HTTP_PORT:-80}:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      filecodebox:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck: # 用 127.0.0.1:nginx 仅绑 IPv4,localhost 在 alpine 先解析 ::1 会被拒
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/nginx-health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  redisdata:
